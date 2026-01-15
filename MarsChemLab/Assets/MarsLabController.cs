@@ -13,15 +13,20 @@ public class MarsLabController : MonoBehaviour
     public TextMeshProUGUI valueDisplay;
     public TextMeshProUGUI aiResponseText;
     public Button submitButton;
+    public TextMeshProUGUI tempDisplay; // 温度显示
 
     [Header("配置")]
-    // Key 将从本地文件加载
-    public string zhipuApiKey = "";
+    public string zhipuApiKey = ""; // 如果本地加载失败，可以在这里手动填入备用
 
-    // 化学常量
+    // --- 硬核化学常量 ---
     private const float M_Na2O2 = 78f;
     private const float M_O2 = 32f;
     private const float ConsumptionRate = 50f;
+
+    // 热力学数据
+    private const float EnthalpyPerMoleO2 = 487f;
+    private const float ReactorHeatCapacity = 100f;
+    private const float BaseTemp = 25f;
 
     void Start()
     {
@@ -36,23 +41,32 @@ public class MarsLabController : MonoBehaviour
 
     void LoadApiKey()
     {
-        // 从 Assets/api_key.txt 读取 API Key
+        // 尝试读取本地 Key，如果没有读到，就会用 Inspector 里填的默认值
         string path = System.IO.Path.Combine(Application.dataPath, "api_key.txt");
         if (System.IO.File.Exists(path))
         {
             zhipuApiKey = System.IO.File.ReadAllText(path).Trim();
         }
-        else
-        {
-            Debug.LogError("API Key file not found at: " + path);
-            if (aiResponseText != null) aiResponseText.text = "Error: API Key missing.";
-        }
     }
 
     void OnSliderChange(float val)
     {
+        // 实时计算预览
+        float molesNa2O2 = val / M_Na2O2;
+        float molesO2 = molesNa2O2 * 0.5f;
+        float heatGenerated = molesO2 * EnthalpyPerMoleO2;
+        float finalTemp = BaseTemp + (heatGenerated / ReactorHeatCapacity);
+
         if (valueDisplay != null)
             valueDisplay.text = $"Na2O2 Input: {val:F0} g";
+
+        if (tempDisplay != null)
+        {
+            tempDisplay.text = $"Reactor Temp: {finalTemp:F0} °C";
+            if (finalTemp > 300) tempDisplay.color = Color.red;
+            else if (finalTemp > 100) tempDisplay.color = Color.yellow;
+            else tempDisplay.color = Color.cyan;
+        }
     }
 
     public void OnSubmit()
@@ -62,30 +76,56 @@ public class MarsLabController : MonoBehaviour
         float molesO2 = molesNa2O2 * 0.5f;
         float massO2 = molesO2 * M_O2;
         float survivalHours = massO2 / ConsumptionRate;
+        float heatKJ = molesO2 * EnthalpyPerMoleO2;
+        float finalTemp = BaseTemp + (heatKJ / ReactorHeatCapacity);
 
-        // 本地计算结果
-        string localResult = $"[SYSTEM CALCULATION]\nO2 Produced: {massO2:F1}g\nEst. Survival: {survivalHours:F1} Hours";
+        // 先显示本地计算结果（让老师看到没有 AI 也能用）
+        string status = "";
+        bool isOverheat = finalTemp > 300f;
+
+        if (isOverheat) status = "<color=red>[CRITICAL WARNING: THERMAL RUNAWAY]</color>";
+        else status = "<color=green>[THERMAL STABLE]</color>";
+
+        string localResult = $"[SYSTEM ANALYSIS]\n" +
+                             $"O2 Yield: {massO2:F1} g\n" +
+                             $"Survival: {survivalHours:F1} Hours\n" +
+                             $"Reactor Temp: {finalTemp:F0} °C\n" +
+                             $"{status}";
+
         aiResponseText.text = localResult + "\n\n<color=yellow>Connecting to MOSS AI...</color>";
 
-        // 呼叫 AI
-        StartCoroutine(CallZhipuAI(massO2, survivalHours));
+        StartCoroutine(CallZhipuAI(massO2, survivalHours, finalTemp));
     }
 
-    IEnumerator CallZhipuAI(float o2, float hours)
+    IEnumerator CallZhipuAI(float o2, float hours, float temp)
     {
-        // 这里的 Prompt 设定了 AI 扮演 MOSS
-        string prompt = $"You are MOSS, the AI of a Mars Base. " +
-                        $"A student engineer added chemical reactants producing {o2:F1}g of Oxygen, " +
-                        $"allowing survival for {hours:F1} hours. " +
-                        $"If hours < 5, warn them urgently in English (USE CAPS). " +
-                        $"If hours > 10, congratulate them calmly in English. " +
-                        $"Keep it extremely short (under 20 words).";
+        // 1. 定义 Prompt (这里用换行是为了代码好看)
+        string rawPrompt = $@"
+You are MOSS, the safety AI of the Mars Base. 
+Current System Status: 
+- Oxygen Yield: {o2:F1} g
+- Survival Time: {hours:F1} hours
+- Reactor Temp: {temp:F0} Celsius (Critical Limit: 300 C)
 
-        // 构造 JSON
+Your Task: Output a system log based strictly on the following logic. Do not add any other words.
+
+Logic Chain:
+1. IF Temp > 300: Output 'CRITICAL ALERT: REACTOR OVERHEAT. EVACUATE IMMEDIATELY.'
+2. IF Temp <= 300 AND Hours < 5: Output 'WARNING: INSUFFICIENT OXYGEN. INCREASE DOSAGE.'
+3. IF Temp <= 300 AND Hours >= 5: Output 'SYSTEM STABLE. LIFE SUPPORT ONLINE.'
+
+Output Format: Just the sentence from the logic chain.
+";
+
+        // 2. ⭐关键修复⭐：把 Prompt 清洗成 JSON 能接受的单行格式
+        string safePrompt = rawPrompt.Replace("\n", "\\n").Replace("\r", "").Replace("\"", "\\\"");
+
+        // 3. 构造 JSON
         string json = "{" +
             "\"model\": \"glm-4\"," +
+            "\"temperature\": 0.1," +
             "\"messages\": [" +
-                "{\"role\": \"user\", \"content\": \"" + prompt + "\"}" +
+                "{\"role\": \"user\", \"content\": \"" + safePrompt + "\"}" +
             "]" +
         "}";
 
@@ -100,13 +140,13 @@ public class MarsLabController : MonoBehaviour
 
         if (request.result == UnityWebRequest.Result.Success)
         {
-            string response = request.downloadHandler.text;
-            string content = ExtractContent(response);
-            aiResponseText.text = $"[MOSS LOG]\n{content}";
+            string content = ExtractContent(request.downloadHandler.text);
+            aiResponseText.text = $"<color=cyan>[MOSS LOG]</color>\n{content}";
         }
         else
         {
-            aiResponseText.text = "Error: " + request.error;
+            // 如果还是报错，打印详细信息
+            aiResponseText.text = "Error: " + request.error + "\n" + request.downloadHandler.text;
         }
     }
 
@@ -118,13 +158,9 @@ public class MarsLabController : MonoBehaviour
             if (contentIndex == -1) return "System Offline.";
             int start = contentIndex + 11;
             int end = json.IndexOf("\"", start);
-            // 简单处理转义字符
             string result = json.Substring(start, end - start);
             return result.Replace("\\n", "\n").Replace("\\\"", "\"");
         }
-        catch
-        {
-            return "Data Error.";
-        }
+        catch { return "Data Parsing Error."; }
     }
 }
