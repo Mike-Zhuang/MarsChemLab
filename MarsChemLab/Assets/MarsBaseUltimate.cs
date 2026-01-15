@@ -91,17 +91,13 @@ public class MarsBaseUltimate : MonoBehaviour
         // --- 修复版：平滑的速率曲线 ---
         float rateK = 0f;
 
+
+        // 原代码：湿度 60% 才到 1.0
+        // 修改版：湿度 30% 就满速了
         if (humidity <= 20)
-        {
-            // 0% - 20%: 速率从 0 缓慢升到 0.2 (不再是死板的 0.1)
-            rateK = Mathf.Lerp(0f, 0.2f, humidity / 20f);
-        }
+            rateK = Mathf.Lerp(0f, 0.5f, humidity / 20f); // 20%时就有一半效率
         else if (humidity <= 60)
-        {
-            // 20% - 60%: 速率从 0.2 线性升到 1.0 (最佳区间)
-            // 这就是我们要的“中间档位”
-            rateK = Mathf.Lerp(0.2f, 1.0f, (humidity - 20f) / 40f);
-        }
+            rateK = Mathf.Lerp(0.5f, 1.0f, (humidity - 20f) / 40f);
         else
         {
             // 60% - 100%: 速率从 1.0 飙升到 1.5 (失控区间)
