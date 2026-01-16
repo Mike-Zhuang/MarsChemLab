@@ -18,6 +18,9 @@
 *.tmp
 *.user
 *.userprefs
+*.pdf
+*.pptx
+*.docx
 *.pid
 *.booproj
 *.svnn
@@ -63,3 +66,4 @@ Thumbs.db
 # Secrets
 MarsChemLab/Assets/api_key.txt
 MarsChemLab/Assets/api_key.txt.meta
+
