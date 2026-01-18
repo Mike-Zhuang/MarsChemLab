@@ -189,6 +189,16 @@
    - 在 `MarsChemLab/Assets/` 下创建 `api_key.txt`。
    - 粘贴你的 Key (不含空格换行)。
 
+### 🏗️ 构建指南 (Build)
+
+如果你想生成独立的 executable 运行：
+1. 在 Unity 中打开 **File > Build Settings**。
+2. 将 **Scenes/SampleScene** 添加到 "Scenes In Build"。
+3. 选择目标平台 (Windows/macOS)。
+4. 点击 **Build** 并选择输出目录（推荐 `Mars_Windows_Build/`）。
+
+> **注意**：本项目已包含最新的 Windows 构建版本，可直接在 `Mars_Windows_Build/` 目录下运行体验。
+
 ---
 
 ## 💡 遇到“意外”怎么办？(Troubleshooting)

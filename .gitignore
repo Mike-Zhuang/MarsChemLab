@@ -66,4 +66,12 @@ Thumbs.db
 # Secrets
 MarsChemLab/Assets/api_key.txt
 MarsChemLab/Assets/api_key.txt.meta
+**/api_key.txt
+
+
+# Builds
+# Mars_Windows_Build/ # Keep builds in repo
+*[Bb]urst[Dd]ebug[Ii]nformation_DoNotShip/
+*[Bb]ack[Uu]p[Tt]his[Ff]older_But[Dd]ont[Ss]hip[Ii]t[Ww]ith[Yy]our[Gg]ame/
+*.slnx
 
