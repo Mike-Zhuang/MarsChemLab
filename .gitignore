@@ -1,3 +1,5 @@
+# Ignore zip archives in repository root
+/*.zip
 # Unity generated folders
 [Ll]ibrary/
 [Tt]emp/
